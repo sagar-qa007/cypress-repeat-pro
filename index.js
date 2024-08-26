@@ -2,7 +2,7 @@
 
 // @ts-check
 
-const debug = require('debug')('cypress-repeat');
+const debug = require('debug')('cypress-repeat-pro');
 const cypress = require('cypress');
 const arg = require('arg');
 const Bluebird = require('bluebird');

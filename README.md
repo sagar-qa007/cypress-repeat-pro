@@ -1,4 +1,4 @@
-# cypress-repeat-updated 
+# cypress-repeat-pro 
 [cypress version](https://img.shields.io/badge/cypress-8.7.0-brightgreen)
 
 > Run Cypress multiple times in a row, great at finding test flaky and force is needed
@@ -63,3 +63,13 @@ Run this script with environment variable `DEBUG=cypress-repeat-pro` to see verb
 ## What about test retries?
 
 This NPM module retries the entire Cypress run, if you need to retry just the failed tests, use the [Test Retries](https://docs.cypress.io/guides/guides/test-retries).
+
+## How will be output file looks like?
+```
+    ***** Repeat Run Summary *****
+    Total Tests with repeat: 8
+    Total Passed: 7
+    Total Failed: 1
+    Total Skipped: 0
+    *****************************
+```

@@ -2,7 +2,7 @@
 
 // this spec is always passing
 describe('cypress-repeat-pro passing', () => {
-  it('first', () => {
+  it('first', { tags: ['@passing'] }, () => {
     cy.wait(100)
   })
 })

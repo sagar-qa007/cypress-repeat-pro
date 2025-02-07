@@ -188,5 +188,6 @@ parseArguments()
     console.error('Error:', e.message);
     if (!forceContinue) {
       console.log('Exiting with failure due to an error.');
+      process.exit(1); // Exit with non-zero status on error
     }
   });

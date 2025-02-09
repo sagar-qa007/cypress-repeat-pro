@@ -25,7 +25,7 @@ Which will run Cypresss `<N>` times, exiting after the first failed run or after
 
 ### Until passes
 
-You can flip the logic and run Cypress up to N times until the first successful exit
+You can flip the logic and run Cypress up to N times until the first successful exit with only fail spec
 
 ```shell
 npx cypress-repeat-pro run -n <N> --until-passes ... rest of "cypress run" arguments

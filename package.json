@@ -1,6 +1,6 @@
 {
   "name": "cypress-repeat-pro",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Run Cypress multiple times in a row with pro options",
   "bin": {
     "cypress-repeat-pro": "index.js"

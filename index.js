@@ -54,9 +54,6 @@ let totalPassed = 0;
 let totalFailed = 0;
 let totalSkipped = 0;
 
-/**
- * Quick and dirty deep clone
- */
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 const parseArguments = async () => {
@@ -84,11 +81,6 @@ parseArguments()
         }
       }
 
-      // Add --force option if explicitly requested
-      if (forceContinue) {
-        runOptions.force = true;
-      }
-
       allRunOptions.push(runOptions);
     }
     return allRunOptions;
@@ -98,62 +90,42 @@ parseArguments()
       const isLastRun = k === n - 1;
       console.log('***** %s %d of %d *****', name, k + 1, n);
 
-      const onTestResults = (testResults) => {
-        // Update totals
+      return cypress.run(runOptions).then((testResults) => {
         totalTests += testResults.totalTests || 0;
         totalPassed += testResults.totalPassed || 0;
         totalFailed += testResults.totalFailed || 0;
         totalSkipped += testResults.totalSkipped || 0;
 
-        debug('is %d the last run? %o', k, isLastRun);
+        if (testResults.status === 'failed') {
+          console.error('%s run %d of %d failed', name, k + 1, n);
+          anyTestFailed = true;
+          if (!forceContinue && (!rerunFailedOnly || isLastRun)) {
+            throw new Error('Failures detected and conditions met');
+          }
+        }
+
+        if (untilPasses && !testResults.totalFailed) {
+          console.log('%s successfully passed on run %d of %d', name, k + 1, n);
+          throw new Error('No failures detected, exiting with success.');
+        }
+
         if (rerunFailedOnly && !isLastRun) {
           const failedSpecs = testResults.runs
-            .filter((run) => run.stats.failures != 0)
+            .filter((run) => run.stats.failures !== 0)
             .map((run) => run.spec.relative)
             .join(',');
 
           if (failedSpecs.length) {
-            console.log('%s failed specs', name);
-            console.log(failedSpecs);
+            console.log('%s failed specs:', name, failedSpecs);
             allRunOptions[k + 1].spec = failedSpecs;
           } else {
-            console.log('%s there were no failed specs', name);
+            console.log('%s no failed specs found', name);
             if (!forceContinue) {
-              return Promise.resolve(); // Prevent early exit
+              throw new Error('No failures, exiting early.');
             }
           }
         }
-
-        if (testResults.status === 'failed') {
-          if (testResults.failures) {
-            console.error(testResults.message);
-            anyTestFailed = true;
-            if (!forceContinue) {
-              return Promise.reject(new Error('Test results indicate failures'));
-            }
-          }
-        }
-
-        if (untilPasses) {
-          if (!testResults.totalFailed) {
-            console.log('%s successfully passed on run %d of %d', name, k + 1, n);
-            return Promise.reject(new Error('No failures detected, exiting with success.'));
-          }
-          console.error('%s run %d of %d failed', name, k + 1, n);
-          if (!forceContinue && k === n - 1) {
-            return Promise.reject(new Error('No more attempts left'));
-          }
-        } else {
-          if (testResults.totalFailed) {
-            console.error('%s run %d of %d failed', name, k + 1, n);
-            if (!forceContinue && (!rerunFailedOnly || isLastRun)) {
-              return Promise.reject(new Error('Failures detected and conditions met'));
-            }
-          }
-        }
-      };
-
-      return cypress.run(runOptions).then(onTestResults);
+      });
     });
   })
   .finally(() => {
@@ -166,9 +138,9 @@ parseArguments()
       `Total Skipped: ${totalSkipped}`,
       `*****************************`
     ].join('\n');
+
     console.log(resultSummary);
 
-    console.log('Writing result summary to file...');
     try {
       const absoluteSummaryFilePath = path.resolve(summaryFilePath);
       fs.writeFileSync(absoluteSummaryFilePath, resultSummary);
@@ -179,15 +151,13 @@ parseArguments()
 
     if (anyTestFailed) {
       console.error('***** Some tests failed during the run(s) *****');
-      console.log('Exiting with failure due to test failures.');
     } else {
-      console.log('***** finished %d run(s) successfully *****', repeatNtimes);
+      console.log('***** Finished %d run(s) successfully *****', repeatNtimes);
     }
   })
   .catch((e) => {
     console.error('Error:', e.message);
     if (!forceContinue) {
-      console.log('Exiting with failure due to an error.');
-      process.exit(1); // Exit with non-zero status on error
+      process.exit(1);
     }
   });

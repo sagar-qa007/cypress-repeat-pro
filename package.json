@@ -15,7 +15,7 @@
     "demo:twice": "node . run -n 2",
     "demo:until-passes": "node . run -n 2 --until-passes",
     "demo:rerun-failed-only": "node . run -n 2 --rerun-failed-only",
-    "demo:force": "node . run -n 2 --force",
+    "demo:force": "node . run -n 4 --force",
     "semantic-release": "semantic-release",
     "demo:until-passeswithspec": "node . run -n 2 --until-passes --spec=\"cypress/e2e/forcewithevenfail.cy.js,cypress/e2e/passing.cy.js\"",
     "demo:rerun-failed-onlywithspec": "node . run -n 3 --rerun-failed-only --spec=\"cypress/e2e/passing.cy.js,cypress/e2e/spec.cy.js\"",

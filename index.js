@@ -1,30 +1,19 @@
 #!/usr/bin/env node
 
-// @ts-check
-
 const debug = require('debug')('cypress-repeat-pro');
 const cypress = require('cypress');
 const arg = require('arg');
-const Bluebird = require('bluebird');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
 
-debug('process argv %o', process.argv);
-
-// Path to the summary file
 const summaryFilePath = path.join(process.cwd(), 'cy-repeat-summary.txt');
-
 if (fs.existsSync(summaryFilePath)) {
   console.log('Deleting existing summary file');
   try {
     fs.unlinkSync(summaryFilePath);
-    console.log('Existing summary file deleted successfully');
   } catch (err) {
     console.error('Error deleting summary file:', err.message);
   }
-} else {
-  console.log('No existing summary file to delete');
 }
 
 const args = arg(
@@ -37,127 +26,98 @@ const args = arg(
   { permissive: true }
 );
 
-const name = 'cypress-repeat-pro:';
 const repeatNtimes = args['-n'] || 1;
 const untilPasses = args['--until-passes'] || false;
 const rerunFailedOnly = args['--rerun-failed-only'] || false;
-const forceContinue = args['--force'] || false;
+const force = args['--force'] || false;
 
-console.log('%s will repeat Cypress command %d time(s)', name, repeatNtimes);
-if (untilPasses) console.log('%s but only until it passes', name);
-if (rerunFailedOnly) console.log('%s it only reruns specs which have failed', name);
-if (forceContinue) console.log('%s will force continue through all iterations', name);
-
-let anyTestFailed = false;
 let totalTests = 0;
 let totalPassed = 0;
 let totalFailed = 0;
 let totalSkipped = 0;
+let hasFailures = false;
 
-const clone = (x) => JSON.parse(JSON.stringify(x));
+const runCypress = async (options) => {
+  console.log(`Running Cypress with options: ${JSON.stringify(options)}`);
+  const testResults = await cypress.run(options);
 
-const parseArguments = async () => {
-  const cliArgs = args._;
-  if (cliArgs[0] !== 'cypress') cliArgs.unshift('cypress');
-  if (cliArgs[1] !== 'run') cliArgs.splice(1, 0, 'run');
-  debug('parsing Cypress CLI %o', cliArgs);
-  return await cypress.cli.parseRunArguments(cliArgs);
+  totalTests += testResults.totalTests || 0;
+  totalPassed += testResults.totalPassed || 0;
+  totalFailed += testResults.totalFailed || 0;
+  totalSkipped += testResults.totalSkipped || 0;
+
+  if (testResults.status === 'failed') {
+    console.error('Cypress run failed.');
+    hasFailures = true;
+  }
+
+  return testResults;
 };
 
-parseArguments()
-  .then((options) => {
-    debug('parsed CLI options %o', options);
-    const allRunOptions = [];
+const summarizeResults = () => {
+  const resultSummary = [
+    '***** Repeat Run Summary *****',
+    `Total Tests: ${totalTests}`,
+    `Total Passed: ${totalPassed}`,
+    `Total Failed: ${totalFailed}`,
+    `Total Skipped: ${totalSkipped}`,
+    '*****************************',
+  ].join('\n');
 
-    for (let k = 0; k < repeatNtimes; k++) {
-      const runOptions = clone(options);
-      const envVariables = `cypress_repeat_n=${repeatNtimes},cypress_repeat_k=${k + 1}`;
-      runOptions.env = runOptions.env ? runOptions.env + ',' + envVariables : envVariables;
+  console.log(resultSummary);
+  try {
+    fs.writeFileSync(summaryFilePath, resultSummary);
+    console.log(`Result summary written successfully at: ${summaryFilePath}`);
+  } catch (err) {
+    console.error('Error writing result summary:', err.message);
+  }
+};
 
-      if (options.record && options.group) {
-        runOptions.group = options.group;
-        if (runOptions.group && repeatNtimes > 1) {
-          runOptions.group += `-${k + 1}-of-${repeatNtimes}`;
-        }
-      }
+const main = async () => {
+  let attempt = 0;
+  let failedSpecs = [];
 
-      allRunOptions.push(runOptions);
-    }
-    return allRunOptions;
-  })
-  .then((allRunOptions) => {
-    return Bluebird.mapSeries(allRunOptions, (runOptions, k, n) => {
-      const isLastRun = k === n - 1;
-      console.log('***** %s %d of %d *****', name, k + 1, n);
+  while (attempt < repeatNtimes) {
+    attempt++;
+    console.log(`***** Cypress Run Attempt ${attempt}${untilPasses ? '' : ` of ${repeatNtimes}`} *****`);
 
-      return cypress.run(runOptions).then((testResults) => {
-        totalTests += testResults.totalTests || 0;
-        totalPassed += testResults.totalPassed || 0;
-        totalFailed += testResults.totalFailed || 0;
-        totalSkipped += testResults.totalSkipped || 0;
-
-        if (testResults.status === 'failed') {
-          console.error('%s run %d of %d failed', name, k + 1, n);
-          anyTestFailed = true;
-          if (!forceContinue && (!rerunFailedOnly || isLastRun)) {
-            throw new Error('Failures detected and conditions met');
-          }
-        }
-
-        if (untilPasses && !testResults.totalFailed) {
-          console.log('%s successfully passed on run %d of %d', name, k + 1, n);
-          throw new Error('No failures detected, exiting with success.');
-        }
-
-        if (rerunFailedOnly && !isLastRun) {
-          const failedSpecs = testResults.runs
-            .filter((run) => run.stats.failures !== 0)
-            .map((run) => run.spec.relative)
-            .join(',');
-
-          if (failedSpecs.length) {
-            console.log('%s failed specs:', name, failedSpecs);
-            allRunOptions[k + 1].spec = failedSpecs;
-          } else {
-            console.log('%s no failed specs found', name);
-            if (!forceContinue) {
-              throw new Error('No failures, exiting early.');
-            }
-          }
-        }
-      });
-    });
-  })
-  .finally(() => {
-    console.log('Entering final result summary block...');
-    const resultSummary = [
-      '***** Repeat Run Summary *****',
-      `Total Tests with repeat: ${totalTests}`,
-      `Total Passed: ${totalPassed}`,
-      `Total Failed: ${totalFailed}`,
-      `Total Skipped: ${totalSkipped}`,
-      `*****************************`
-    ].join('\n');
-
-    console.log(resultSummary);
-
-    try {
-      const absoluteSummaryFilePath = path.resolve(summaryFilePath);
-      fs.writeFileSync(absoluteSummaryFilePath, resultSummary);
-      console.log(`Result summary written successfully at: ${absoluteSummaryFilePath}`);
-    } catch (err) {
-      console.error('Error writing result summary to file:', err.message);
+    const options = { ...args._ };
+    if (rerunFailedOnly && failedSpecs.length > 0) {
+      options.spec = failedSpecs.join(',');
+      console.log(`Re-running failed specs: ${failedSpecs.join(', ')}`);
     }
 
-    if (anyTestFailed) {
-      console.error('***** Some tests failed during the run(s) *****');
-    } else {
-      console.log('***** Finished %d run(s) successfully *****', repeatNtimes);
+    const testResults = await runCypress(options);
+
+    if (testResults.totalFailed === 0) {
+      console.log('All tests passed successfully!');
+      summarizeResults();
+      process.exit(0);
     }
-  })
-  .catch((e) => {
-    console.error('Error:', e.message);
-    if (!forceContinue) {
+
+    failedSpecs = testResults.runs
+      .filter((run) => run.stats.failures > 0)
+      .map((run) => run.spec.relative);
+
+    console.log(`Failed specs for re-run: ${failedSpecs.join(', ')}`);
+
+    if (untilPasses && attempt < repeatNtimes) {
+      console.log(`Retrying due to --until-passes... Attempt ${attempt + 1}`);
+    } else if (!untilPasses && attempt >= repeatNtimes) {
+      console.error('Tests failed after maximum retries.');
+      summarizeResults();
       process.exit(1);
     }
-  });
+  }
+
+  if (hasFailures) {
+    console.error('Tests failed after maximum retries.');
+    summarizeResults();
+    process.exit(1);
+  }
+};
+
+main().catch((err) => {
+  console.error('Error:', err.message);
+  process.exit(1);
+});

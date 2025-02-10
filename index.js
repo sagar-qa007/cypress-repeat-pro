@@ -22,6 +22,7 @@ const args = arg(
     '--until-passes': Boolean,
     '--rerun-failed-only': Boolean,
     '--force': Boolean,
+    '--spec': String,
   },
   { permissive: true }
 );
@@ -29,38 +30,50 @@ const args = arg(
 const repeatNtimes = args['-n'] || 1;
 const untilPasses = args['--until-passes'] || false;
 const rerunFailedOnly = args['--rerun-failed-only'] || false;
-const force = args['--force'] || false;
+const spec = args['--spec'] ? args['--spec'].split(',') : [];
 
 let totalTests = 0;
 let totalPassed = 0;
 let totalFailed = 0;
 let totalSkipped = 0;
-let hasFailures = false;
+let failedTestCases = new Set();
+let failedSpecs = [];
 
 const runCypress = async (options) => {
   console.log(`Running Cypress with options: ${JSON.stringify(options)}`);
   const testResults = await cypress.run(options);
+
+  console.log('Cypress run completed.');
+  console.log(`Tests run: ${testResults.totalTests}`);
+  console.log(`Passed: ${testResults.totalPassed}, Failed: ${testResults.totalFailed}, Skipped: ${testResults.totalSkipped}`);
 
   totalTests += testResults.totalTests || 0;
   totalPassed += testResults.totalPassed || 0;
   totalFailed += testResults.totalFailed || 0;
   totalSkipped += testResults.totalSkipped || 0;
 
-  if (testResults.status === 'failed') {
-    console.error('Cypress run failed.');
-    hasFailures = true;
-  }
+  testResults.runs.forEach((run) => {
+    run.tests.forEach((test) => {
+      if (test.state === 'failed') {
+        failedTestCases.add(`${run.spec.relative} - ${test.title.join(' > ')}`);
+      }
+    });
+  });
 
   return testResults;
 };
 
 const summarizeResults = () => {
+  const failedList = Array.from(failedTestCases).join('\n');
   const resultSummary = [
     '***** Repeat Run Summary *****',
     `Total Tests: ${totalTests}`,
     `Total Passed: ${totalPassed}`,
     `Total Failed: ${totalFailed}`,
     `Total Skipped: ${totalSkipped}`,
+    '*****************************',
+    'Failed Test Cases:',
+    failedList || 'None',
     '*****************************',
   ].join('\n');
 
@@ -75,17 +88,16 @@ const summarizeResults = () => {
 
 const main = async () => {
   let attempt = 0;
-  let failedSpecs = [];
 
   while (attempt < repeatNtimes) {
     attempt++;
     console.log(`***** Cypress Run Attempt ${attempt}${untilPasses ? '' : ` of ${repeatNtimes}`} *****`);
 
-    const options = { ...args._ };
-    if (rerunFailedOnly && failedSpecs.length > 0) {
-      options.spec = failedSpecs.join(',');
-      console.log(`Re-running failed specs: ${failedSpecs.join(', ')}`);
-    }
+    const options = {
+      spec: rerunFailedOnly && failedSpecs.length > 0 ? failedSpecs.join(',') : spec.join(','),
+    };
+
+    console.log(`Running Cypress with spec: ${options.spec || 'All specs'}`);
 
     const testResults = await runCypress(options);
 
@@ -110,11 +122,8 @@ const main = async () => {
     }
   }
 
-  if (hasFailures) {
-    console.error('Tests failed after maximum retries.');
-    summarizeResults();
-    process.exit(1);
-  }
+  summarizeResults();
+  process.exit(totalFailed > 0 ? 1 : 0);
 };
 
 main().catch((err) => {

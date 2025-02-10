@@ -1,6 +1,6 @@
 /// <reference types="cypress" />
 
-describe('cypress-repeat', () => {
+describe('cypress-repeat-pro', () => {
   it('first', () => {
     cy.wait(100)
   })

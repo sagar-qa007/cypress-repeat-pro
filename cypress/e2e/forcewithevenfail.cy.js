@@ -1,6 +1,6 @@
 /// <reference types="cypress" />
 
-describe('cypress-repeat-pro passing', () => {
+describe('cypress-repeat-pro with force', () => {
   let count = 0;
 
   before(() => {

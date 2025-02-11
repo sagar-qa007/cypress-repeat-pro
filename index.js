@@ -115,20 +115,22 @@ parseArguments()
         }
 
         debug('is %d the last run? %o', k, isLastRun);
-        if (rerunFailedOnly && !isLastRun) {
+        if (rerunFailedOnly) {
           const failedSpecs = testResults.runs
-            .filter((run) => run.stats.failures != 0)
+            .filter((run) => run.stats.failures !== 0)
             .map((run) => run.spec.relative)
             .join(',');
 
           if (failedSpecs.length) {
-            console.log('%s failed specs', name);
-            console.log(failedSpecs);
-            allRunOptions[k + 1].spec = failedSpecs;
+            console.log('Failed specs: %s', failedSpecs);
+            if (!isLastRun) {
+              allRunOptions[k + 1].spec = failedSpecs;
+            }
           } else {
-            console.log('%s there were no failed specs', name);
+            console.log('All specs passed on run %d of %d', k + 1, n);
             if (!forceContinue) {
-              return Promise.resolve(); // Prevent early exit
+              console.log('Exiting early as no failed specs detected.');
+              return Promise.reject(new Error('No failures detected, exiting early.'));
             }
           }
         }

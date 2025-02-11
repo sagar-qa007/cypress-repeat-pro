@@ -53,6 +53,7 @@ let totalTests = 0;
 let totalPassed = 0;
 let totalFailed = 0;
 let totalSkipped = 0;
+let lastRunFailed = false;
 
 /**
  * Quick and dirty deep clone
@@ -104,6 +105,14 @@ parseArguments()
         totalPassed += testResults.totalPassed || 0;
         totalFailed += testResults.totalFailed || 0;
         totalSkipped += testResults.totalSkipped || 0;
+
+        if (testResults.totalFailed) {
+          console.error('%s run failed', name);
+          anyTestFailed = true;
+          if (isLastRun) {
+            lastRunFailed = true;
+          }
+        }
 
         debug('is %d the last run? %o', k, isLastRun);
         if (rerunFailedOnly && !isLastRun) {
@@ -180,6 +189,7 @@ parseArguments()
     if (anyTestFailed) {
       console.error('***** Some tests failed during the run(s) *****');
       console.log('Exiting with failure due to test failures.');
+      process.exit(1);
     } else {
       console.log('***** finished %d run(s) successfully *****', repeatNtimes);
     }

@@ -188,8 +188,8 @@ parseArguments()
       console.error('Error writing result summary to file:', err.message);
     }
 
-    if (anyTestFailed) {
-      console.error('***** Some tests failed during the run(s) *****');
+    if (rerunFailedOnly && lastRunFailed) {
+      console.error('***** Some tests failed during the run(s) event after all retry *****');
       console.log('Exiting with failure due to test failures.');
       process.exit(1);
     } else {
